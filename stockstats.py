@@ -112,15 +112,13 @@ class StockDataFrame(pd.DataFrame):
         df.get(column)
         shifts = StockDataFrame.to_ints(shifts)[::-1]
         indices = None
-        count = 0
-        for shift in shifts:
+        for count, shift in enumerate(shifts):
             shifted = df.shift(-shift)
             index = (shifted[column] > 0) * (2 ** count)
             if indices is None:
                 indices = index
             else:
                 indices += index
-            count += 1
         if indices is not None:
             cp = indices.copy()
             StockDataFrame.set_nan(cp, shifts)
@@ -153,12 +151,10 @@ class StockDataFrame(pd.DataFrame):
 
     @staticmethod
     def _process_shifts_segment(shift_segment):
-        if '~' in shift_segment:
-            start, end = shift_segment.split('~')
-            shifts = range(int(start), int(end) + 1)
-        else:
-            shifts = [int(shift_segment)]
-        return shifts
+        if '~' not in shift_segment:
+            return [int(shift_segment)]
+        start, end = shift_segment.split('~')
+        return range(int(start), int(end) + 1)
 
     @staticmethod
     def set_nan(pd_obj, shift):
@@ -265,10 +261,7 @@ class StockDataFrame(pd.DataFrame):
             ret = [1]
         else:
             ret = np.zeros(abs(shift) + 1)
-            if shift < 0:
-                ret[[0, -1]] = 1, -1
-            else:
-                ret[[0, -1]] = -1, 1
+            ret[[0, -1]] = (1, -1) if shift < 0 else (-1, 1)
         return ret
 
     @classmethod
@@ -315,7 +308,7 @@ class StockDataFrame(pd.DataFrame):
 
     @staticmethod
     def _positive_sum(data):
-        data = [i if i > 0 else 0 for i in data]
+        data = [max(i, 0) for i in data]
         ret = data[0]
         for i in data[1:]:
             ret = (ret * (len(data) - 1) + i) / len(data)
@@ -582,10 +575,7 @@ class StockDataFrame(pd.DataFrame):
         column_name = 'pdm_{}'.format(window)
         um, dm = df['um'], df['dm']
         df['pdm'] = np.where(um > dm, um, 0)
-        if window > 1:
-            pdm = df['pdm_{}_ema'.format(window)]
-        else:
-            pdm = df['pdm']
+        pdm = df['pdm_{}_ema'.format(window)] if window > 1 else df['pdm']
         df[column_name] = pdm
 
     @classmethod
@@ -625,10 +615,7 @@ class StockDataFrame(pd.DataFrame):
         column_name = 'mdm_{}'.format(window)
         um, dm = df['um'], df['dm']
         df['mdm'] = np.where(dm > um, dm, 0)
-        if window > 1:
-            mdm = df['mdm_{}_ema'.format(window)]
-        else:
-            mdm = df['mdm']
+        mdm = df['mdm_{}_ema'.format(window)] if window > 1 else df['mdm']
         df[column_name] = mdm
 
     @classmethod
@@ -994,10 +981,7 @@ class StockDataFrame(pd.DataFrame):
     @classmethod
     def parse_cross_column(cls, name):
         m = re.match(cls.CROSS_COLUMN_MATCH_STR, name)
-        ret = [None, None, None]
-        if m is not None:
-            ret = m.group(1, 2, 3)
-        return ret
+        return m.group(1, 2, 3) if m is not None else [None, None, None]
 
     @staticmethod
     def _get_rate(df):
@@ -1130,10 +1114,7 @@ class StockDataFrame(pd.DataFrame):
         if anchor is None:
             anchor = self.get_today()
         other_day = get_date_from_diff(anchor, delta_day)
-        if delta_day > 0:
-            start, end = anchor, other_day
-        else:
-            start, end = other_day, anchor
+        start, end = (anchor, other_day) if delta_day > 0 else (other_day, anchor)
         return self.retype(self.loc[start:end])
 
     def till(self, end_date):
